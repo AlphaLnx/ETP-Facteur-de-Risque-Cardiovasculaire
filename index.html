@@ -287,8 +287,17 @@ function Step2({selected,levels,onSetLevel,onNext,onBack}) {
 
 /* ─── CHECKLIST ───────────────────────────────────────────────────────────── */
 function Checklist({selTopics, levels}) {
-  const [checked, setChecked] = useState({});
-  const toggle = (id) => setChecked(prev => ({...prev, [id]: !prev[id]}));
+  const LS_CHECK = "etp_checklist_v1";
+  const loadChecked = () => {
+    try { var r = localStorage.getItem(LS_CHECK); if(r) return JSON.parse(r); } catch(e) {}
+    return {};
+  };
+  const [checked, setChecked] = useState(loadChecked);
+  const toggle = (id) => setChecked(prev => {
+    var next = {...prev, [id]: !prev[id]};
+    try { localStorage.setItem(LS_CHECK, JSON.stringify(next)); } catch(e) {}
+    return next;
+  });
 
   const grouped = selTopics.map(t => ({
     topic: t,
@@ -570,20 +579,76 @@ function Step3({selected,levels,onBack,onRestart}) {
   );
 }
 
+/* ─── PERSISTENCE localStorage ───────────────────────────────────────────── */
+const LS_KEY = "etp_plan_v1";
+
+function loadState() {
+  try {
+    var raw = localStorage.getItem(LS_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch(e) {}
+  return null;
+}
+
+function saveState(step, selected, levels) {
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify({step:step, selected:selected, levels:levels}));
+  } catch(e) {}
+}
+
+function clearState() {
+  try { localStorage.removeItem(LS_KEY); } catch(e) {}
+}
+
 /* ─── APP ─────────────────────────────────────────────────────────────────── */
 function App() {
-  const [step, setStep] = useState(1);
-  const [selected, setSelected] = useState([]);
-  const [levels, setLevels] = useState({});
+  var saved = loadState();
+  const [step,     setStep]     = useState(saved ? saved.step     : 1);
+  const [selected, setSelected] = useState(saved ? saved.selected : []);
+  const [levels,   setLevels]   = useState(saved ? saved.levels   : {});
+  const [restored, setRestored] = useState(!!saved);
 
-  const toggleTopic = id => setSelected(prev => prev.includes(id) ? prev.filter(x=>x!==id) : prev.length<5 ? [...prev,id] : prev);
-  const setLevel   = (id,lv) => setLevels(prev => ({...prev,[id]:lv}));
-  const goTo = n => { setStep(n); window.scrollTo({top:0,behavior:"smooth"}); };
-  const restart = () => { setSelected([]); setLevels({}); goTo(1); };
+  const persist = (s, sel, lv) => saveState(s, sel, lv);
+
+  const toggleTopic = id => setSelected(prev => {
+    var next = prev.includes(id) ? prev.filter(x=>x!==id) : prev.length<5 ? [...prev,id] : prev;
+    persist(step, next, levels);
+    return next;
+  });
+  const setLevel = (id,lv) => setLevels(prev => {
+    var next = {...prev,[id]:lv};
+    persist(step, selected, next);
+    return next;
+  });
+  const goTo = n => {
+    setStep(n);
+    persist(n, selected, levels);
+    window.scrollTo({top:0,behavior:"smooth"});
+  };
+  const restart = () => {
+    clearState();
+    try { localStorage.removeItem("etp_checklist_v1"); } catch(e) {}
+    setSelected([]); setLevels({}); setRestored(false); goTo(1);
+  };
 
   return (
     <div style={{minHeight:"100vh"}}>
       <Header step={step}/>
+
+      {/* Bandeau de reprise de session */}
+      {restored && (
+        <div style={{background:"linear-gradient(135deg,#eaf4fc,#d6eaf8)",borderBottom:"2px solid #aed6f1",padding:"12px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <span style={{fontSize:20}}>💾</span>
+            <div>
+              <div style={{fontFamily:"Arial,sans-serif",fontWeight:"bold",fontSize:14,color:"#1a5276"}}>Session restaurée</div>
+              <div style={{fontFamily:"Arial,sans-serif",fontSize:12,color:"#5d8aa8"}}>Vous reprenez là où vous vous êtes arrêté·e. Vos choix ont été conservés.</div>
+            </div>
+          </div>
+          <button onClick={()=>setRestored(false)} style={{background:"none",border:"1px solid #aed6f1",borderRadius:20,padding:"4px 14px",cursor:"pointer",fontFamily:"Arial,sans-serif",fontSize:12,color:"#1a5276"}}>✕ Fermer</button>
+        </div>
+      )}
+
       {step===1&&<Step1 selected={selected} onToggle={toggleTopic} onNext={()=>goTo(2)}/>}
       {step===2&&<Step2 selected={selected} levels={levels} onSetLevel={setLevel} onNext={()=>goTo(3)} onBack={()=>goTo(1)}/>}
       {step===3&&<Step3 selected={selected} levels={levels} onBack={()=>goTo(2)} onRestart={restart}/>}
