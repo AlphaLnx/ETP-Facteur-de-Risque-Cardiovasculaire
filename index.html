@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ETP — Mon Plan Cardiovasculaire</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Georgia, 'Times New Roman', serif; background: linear-gradient(135deg, #fff5f5 0%, #fef9f0 50%, #f5f0ff 100%); min-height: 100vh; }
+    @keyframes fadeIn    { from { opacity:0; transform:translateY(18px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes slideIn   { from { opacity:0; transform:translateX(30px); } to { opacity:1; transform:translateX(0); } }
+    @keyframes popIn     { from { opacity:0; transform:scale(0.92); }      to { opacity:1; transform:scale(1); } }
+    @keyframes checkBounce { 0%{transform:scale(0)} 60%{transform:scale(1.2)} 100%{transform:scale(1)} }
+    ::-webkit-scrollbar { width:6px; }
+    ::-webkit-scrollbar-thumb { background:#c0392b; border-radius:3px; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState } = React;
+
+/* ─── DONNÉES ─────────────────────────────────────────────────────────────── */
+const TOPICS = [
+  {
+    id:"tabagisme", emoji:"🚭", title:"Tabagisme", subtitle:"Arrêt du tabac", color:"#922b21", bg:"#fdf0ee",
+    levels:{
+      leger:    {label:"Léger",    actions:["Tenir un journal de sa consommation","Repérer les situations déclenchantes","Remplacer une cigarette sur deux par une activité courte (marche, respiration)","Informer son entourage de la démarche"]},
+      moyen:    {label:"Moyen",    actions:["Utiliser des substituts nicotiniques (patchs, gommes)","Consulter son médecin traitant pour un suivi","Fixer une date d'arrêt dans les 3 semaines","Utiliser l'application Tabac Info Service"]},
+      important:{label:"Important",actions:["Prescription médicale (varénicline, bupropion)","Suivi par un tabacologue ou addictologue","Thérapie cognitive et comportementale (TCC)","Appeler Tabac Info Service : 3989"]},
+    },
+    links:[{label:"Tabac Info Service",url:"https://www.tabac-info-service.fr"}],
+    perplexityCtx:"Je suis un patient suivi en réadaptation cardiovasculaire et je souhaite réduire mon tabagisme. J'ai choisi un niveau {level}. Peux-tu m'aider sur le point suivant : ",
+  },
+  {
+    id:"hta", emoji:"🩺", title:"Hypertension (HTA)", subtitle:"Tension < 140/90 mmHg", color:"#6c3483", bg:"#f5eef8",
+    levels:{
+      leger:    {label:"Léger",    actions:["Réduire le sel (max 6 g/jour)","Prendre sa tension régulièrement et noter les résultats","Limiter le café à 2 tasses par jour","Éviter les situations de stress intense"]},
+      moyen:    {label:"Moyen",    actions:["Activité physique douce 30 min/jour","Alimentation DASH (légumes, pauvre en sel)","Réduire fortement l'alcool","Suivi mensuel avec carnet tensionnel"]},
+      important:{label:"Important",actions:["Traitement médicamenteux prescrit et suivi strict","Consultation cardiologique régulière","Automesure tensionnelle matin et soir (règle des 3)","Programme de gestion du stress (sophrologie, relaxation)"]},
+    },
+    links:[{label:"Fédération Française de Cardiologie",url:"https://www.fedecardio.org"},{label:"Ameli — HTA",url:"https://www.ameli.fr/assure/sante/themes/hypertension-arterielle"}],
+    perplexityCtx:"Je suis un patient hypertendu suivi en réadaptation cardiovasculaire. J'ai choisi un niveau {level} pour travailler sur mon hypertension. Peux-tu m'aider sur le point suivant : ",
+  },
+  {
+    id:"alcool", emoji:"🍷", title:"Alcool", subtitle:"Max 2 doses/jour", color:"#7b3f00", bg:"#fdf5e6",
+    levels:{
+      leger:    {label:"Léger",    actions:["Tenir un journal de consommation hebdomadaire","Instaurer 2 jours sans alcool par semaine","Remplacer un verre par une boisson sans alcool au repas","Identifier les situations à risque de surconsommation"]},
+      moyen:    {label:"Moyen",    actions:["Ne jamais dépasser 2 verres/jour et pas tous les jours","Éviter les apéritifs ou se limiter à un verre","Alterner eau et alcool lors des repas ou soirées","Consulter son médecin pour un bilan et soutien"]},
+      important:{label:"Important",actions:["Consultation addictologie ou médecin généraliste","Suivi par une structure spécialisée (CSAPA)","Thérapies de soutien, groupes de parole","Alcool Info Service : 0 980 980 930"]},
+    },
+    links:[{label:"Alcool Info Service",url:"https://www.alcool-info-service.fr"}],
+    perplexityCtx:"Je suis un patient cardiaque souhaitant réduire ma consommation d'alcool avec un niveau {level}. Peux-tu m'aider sur le point suivant : ",
+  },
+  {
+    id:"diabete", emoji:"🩸", title:"Diabète", subtitle:"Glycémie à jeun : 0,70–1,10 g/L", color:"#d35400", bg:"#fef9e7",
+    levels:{
+      leger:    {label:"Léger",    actions:["Surveiller sa glycémie à jeun chaque matin","Réduire les sucres rapides (sodas, sucreries, pain blanc)","Marcher 20 min après chaque repas","Tenir un carnet glycémique"]},
+      moyen:    {label:"Moyen",    actions:["Alimentation à index glycémique bas (légumes, céréales complètes)","Activité physique régulière 30 min/jour","Consulter une diététicienne spécialisée diabète","Viser une perte de 5 à 10 % si en surpoids"]},
+      important:{label:"Important",actions:["Consultation diabétologue ou endocrinologue","Adaptation du traitement médicamenteux","Programme d'éducation thérapeutique diabète","Surveillance HbA1c tous les 3 mois"]},
+    },
+    links:[{label:"Fédération Française des Diabétiques",url:"https://www.federationdesdiabetiques.org"}],
+    perplexityCtx:"Je suis un patient diabétique suivi en cardiologie avec un objectif de niveau {level}. Peux-tu m'aider sur le point suivant : ",
+  },
+  {
+    id:"obesite", emoji:"⚖️", title:"Obésité / Surpoids", subtitle:"IMC ≥ 25 à travailler", color:"#1e8449", bg:"#eafaf1",
+    levels:{
+      leger:    {label:"Léger",    actions:["Manger lentement et sans écran","Réduire les portions de 20 %","Marcher 20 min par jour","Éviter le grignotage entre les repas"]},
+      moyen:    {label:"Moyen",    actions:["3 repas équilibrés par jour, pas de repas sauté","Activité physique 30 min/jour (vélo, natation)","Consulter une diététicienne","Viser -0,5 à 1 kg par semaine maximum"]},
+      important:{label:"Important",actions:["Suivi pluridisciplinaire : médecin, diététicienne, kiné","Programme de réhabilitation nutritionnelle","Bilan médical complet (lipides, glycémie, tension)","Envisager une psychothérapie si rapport émotionnel à la nourriture"]},
+    },
+    links:[{label:"Mangerbouger",url:"https://www.mangerbouger.fr"}],
+    perplexityCtx:"Je suis un patient en surpoids suivi en réadaptation cardiovasculaire avec un objectif de niveau {level}. Peux-tu m'aider sur le point suivant : ",
+  },
+  {
+    id:"stress", emoji:"🧘", title:"Stress", subtitle:"Gestion des émotions", color:"#1a5276", bg:"#eaf4fc",
+    levels:{
+      leger:    {label:"Léger",    actions:["5 min de respiration abdominale matin et soir","Limiter les écrans 1 h avant le coucher","Réserver 30 min/jour pour une activité plaisir","Écrire 3 choses positives de la journée avant de dormir"]},
+      moyen:    {label:"Moyen",    actions:["Méditation guidée (Petit Bambou, Headspace)","Yoga ou tai-chi 2 x par semaine","Cohérence cardiaque : 6 respirations/min, 3 x/jour","Limiter les situations sources de tension"]},
+      important:{label:"Important",actions:["Consultation psychologue ou psychiatre","Thérapie cognitive et comportementale (TCC)","Programme MBSR (Mindfulness Based Stress Reduction)","Évaluation d'un éventuel burn-out ou dépression associée"]},
+    },
+    links:[{label:"Petit Bambou",url:"https://www.petitbambou.com"}],
+    perplexityCtx:"Je suis un patient cardiaque souhaitant mieux gérer mon stress avec un niveau {level}. Peux-tu m'aider sur le point suivant : ",
+  },
+  {
+    id:"sedentarite", emoji:"🚶", title:"Sédentarité", subtitle:"30 min d'activité/jour", color:"#117a65", bg:"#e8f8f5",
+    levels:{
+      leger:    {label:"Léger",    actions:["Prendre les escaliers plutôt que l'ascenseur","Marcher 10 min après chaque repas","Se lever toutes les heures si travail assis","Descendre un arrêt avant sa destination"]},
+      moyen:    {label:"Moyen",    actions:["30 min de marche rapide, vélo ou natation 5 x/semaine","Rejoindre un club ou piscine municipale","Objectif : 7 000 pas par jour (application de suivi)","S'étirer 10 min chaque soir"]},
+      important:{label:"Important",actions:["Bilan d'effort cardiologique avant de reprendre le sport","Programme de réadaptation cardiaque avec kiné","Activité physique adaptée (APA) prescrite par le médecin","Progression vers 150 min/semaine d'activité modérée"]},
+    },
+    links:[{label:"Maisons Sport-Santé",url:"https://www.sports.gouv.fr/maisons-sport-sante"}],
+    perplexityCtx:"Je suis un patient cardiaque qui veut reprendre une activité physique adaptée avec un niveau {level}. Peux-tu m'aider sur le point suivant : ",
+  },
+  {
+    id:"alimentation", emoji:"🥗", title:"Alimentation", subtitle:"Max 6 g de sel par jour", color:"#a04000", bg:"#fdf2e9",
+    levels:{
+      leger:    {label:"Léger",    actions:["Ne plus resaler dans l'assiette","Supprimer charcuteries et plats préparés industriels","Boire 1,5 L d'eau par jour","Manger au moins 3 fruits ou légumes par jour"]},
+      moyen:    {label:"Moyen",    actions:["Régime méditerranéen : poissons gras 2 x/sem, huile d'olive","Limiter les graisses saturées (fromages, beurre, fritures)","Cuisiner soi-même en évitant sel et sauces industrielles","Lire les étiquettes : éviter > 1 g de sel / 100 g"]},
+      important:{label:"Important",actions:["Consultation et suivi par une diététicienne cardio","Bilan nutritionnel complet (glycémie, lipides, carences)","Programme alimentaire personnalisé sur 3 mois","Objectif : descendre progressivement à 5 g de sel/jour"]},
+    },
+    links:[{label:"Mangerbouger — Recettes",url:"https://www.mangerbouger.fr/manger-mieux/recettes"}],
+    perplexityCtx:"Je suis un patient cardiaque souhaitant améliorer son alimentation avec un niveau {level}. Peux-tu m'aider sur le point suivant : ",
+  },
+  {
+    id:"cholesterol", emoji:"🔬", title:"Cholestérol", subtitle:"LDL cible : ≤ 0,55 g/L", color:"#154360", bg:"#eaf2ff",
+    levels:{
+      leger:    {label:"Léger",    actions:["Réduire charcuteries, fromages gras, beurre","Augmenter les fibres solubles (avoine, pomme, légumineuses)","Utiliser huile d'olive ou colza à la place du beurre","Contrôler son bilan lipidique tous les 6 mois"]},
+      moyen:    {label:"Moyen",    actions:["Régime pauvre en graisses saturées, riche en oméga-3","Activité physique aérobie 30 min/jour","Consommer des stérols végétaux (margarines enrichies)","Suivre l'évolution du LDL avec son médecin"]},
+      important:{label:"Important",actions:["Traitement médicamenteux (statines) prescrit et suivi","Consultation cardiologique pour objectif LDL personnalisé","Bilan biologique tous les 3 mois","Régime strict supervisé par une diététicienne"]},
+    },
+    links:[{label:"Ameli — Cholestérol",url:"https://www.ameli.fr/assure/sante/themes/cholesterol"}],
+    perplexityCtx:"Je suis un patient avec un problème de cholestérol suivi en cardiologie, niveau {level}. Peux-tu m'aider sur le point suivant : ",
+  },
+  {
+    id:"apnee", emoji:"😴", title:"Apnée du sommeil", subtitle:"Arrêts respiratoires nocturnes", color:"#4a4a6a", bg:"#f2f3f4",
+    levels:{
+      leger:    {label:"Léger",    actions:["Dormir sur le côté plutôt que sur le dos","Éviter l'alcool et les somnifères le soir","Maintenir un poids de forme (le surpoids aggrave l'apnée)","Éviter de manger lourd dans les 2 h avant le coucher"]},
+      moyen:    {label:"Moyen",    actions:["Consulter son médecin pour une polysomnographie","Perdre du poids si en surpoids","Pratiquer des exercices des muscles oropharyngés","Évaluer la gravité avec un médecin du sommeil"]},
+      important:{label:"Important",actions:["Appareillage PPC (machine à pression positive continue)","Suivi par un pneumologue ou médecin du sommeil","Contrôle de l'observance par télémédecine","Bilan cardiaque complet associé"]},
+    },
+    links:[{label:"Ameli — Apnée",url:"https://www.ameli.fr/assure/sante/themes/apnees-sommeil"}],
+    perplexityCtx:"Je suis un patient cardiaque souffrant d'apnée du sommeil, niveau {level}. Peux-tu m'aider sur le point suivant : ",
+  },
+  {
+    id:"isolement", emoji:"💙", title:"Isolement / Dépression", subtitle:"La solitude affecte le cœur", color:"#2c3e50", bg:"#f2f3f4",
+    levels:{
+      leger:    {label:"Léger",    actions:["Reprendre contact avec des proches une fois par semaine","Rejoindre une association ou un club de loisirs","Sortir marcher quotidiennement pour rompre l'isolement","Participer aux séances collectives d'ETP proposées"]},
+      moyen:    {label:"Moyen",    actions:["Consultation avec un psychologue","Rejoindre un groupe de patients cardiaques (associations)","Programme de bien-être (méditation, yoga, activités manuelles)","En parler ouvertement à son médecin à chaque visite"]},
+      important:{label:"Important",actions:["Consultation psychiatrique pour bilan et traitement","Antidépresseurs si prescrits — ne pas les arrêter seul","Psychothérapie individuelle (TCC, thérapie humaniste)","Accompagnement social si isolement structurel"]},
+    },
+    links:[{label:"Mon soutien psy (remboursé)",url:"https://www.monpsy.sante.gouv.fr"}],
+    perplexityCtx:"Je suis un patient cardiaque souhaitant travailler sur son isolement social / santé mentale, niveau {level}. Peux-tu m'aider sur le point suivant : ",
+  },
+  {
+    id:"traitement", emoji:"💊", title:"Observance du traitement", subtitle:"Ne jamais stopper sans avis médical", color:"#c0392b", bg:"#fdf0ee",
+    levels:{
+      leger:    {label:"Léger",    actions:["Pilulier hebdomadaire à préparer le dimanche","Alarme quotidienne sur le téléphone","Associer la prise à un geste du quotidien (repas, brossage de dents)","Tenir un carnet de suivi des prises"]},
+      moyen:    {label:"Moyen",    actions:["Demander à l'infirmière d'expliquer l'utilité de chaque médicament","Connaître les effets secondaires possibles","Parler ouvertement des effets ressentis à chaque consultation","Application de suivi : Medisafe"]},
+      important:{label:"Important",actions:["Consultation pharmaceutique pour optimiser le schéma de prise","Réévaluation médicale si effets secondaires insupportables","Téléconsultation si déplacements difficiles","Entretien motivationnel avec une infirmière ETP"]},
+    },
+    links:[{label:"Application Medisafe",url:"https://www.medisafe.com"}],
+    perplexityCtx:"Je suis un patient cardiaque voulant améliorer l'observance de son traitement, niveau {level}. Peux-tu m'aider sur le point suivant : ",
+  },
+];
+
+const LEVEL_CFG = {
+  leger:    {label:"Léger",    icon:"🌱", color:"#27ae60", bg:"#eafaf1", border:"#a9dfbf", desc:"Petits changements progressifs, sans bousculer le quotidien"},
+  moyen:    {label:"Moyen",    icon:"🔥", color:"#e67e22", bg:"#fef9e7", border:"#f8c471", desc:"Modifications concrètes avec un engagement régulier"},
+  important:{label:"Important",icon:"⚡", color:"#c0392b", bg:"#fdf0ee", border:"#e8a598", desc:"Changements profonds, souvent avec des professionnels"},
+};
+
+/* utilitaire hex → [r,g,b] */
+function hexRgb(hex) {
+  return [
+    parseInt(hex.slice(1,3),16),
+    parseInt(hex.slice(3,5),16),
+    parseInt(hex.slice(5,7),16),
+  ];
+}
+
+/* ─── STEPPER ─────────────────────────────────────────────────────────────── */
+function Stepper({step}) {
+  const steps = ["Choisir mes axes","Définir mon engagement","Mon plan personnalisé"];
+  return (
+    <div style={{display:"flex",justifyContent:"center",alignItems:"center",padding:"22px 20px 0",flexWrap:"wrap",gap:0}}>
+      {steps.map((s,i)=>{
+        const active=i+1===step, done=i+1<step;
+        return (
+          <React.Fragment key={i}>
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:5}}>
+              <div style={{width:34,height:34,borderRadius:"50%",background:done?"#27ae60":active?"#c0392b":"#ddd",color:"white",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Arial,sans-serif",fontSize:13,fontWeight:"bold",boxShadow:active?"0 0 0 4px rgba(192,57,43,0.2)":"none",transition:"all .3s"}}>{done?"✓":i+1}</div>
+              <span style={{fontFamily:"Arial,sans-serif",fontSize:11,color:active?"#c0392b":done?"#27ae60":"#aaa",fontWeight:active?"bold":"normal",textAlign:"center",maxWidth:85}}>{s}</span>
+            </div>
+            {i<steps.length-1&&<div style={{width:44,height:2,background:done?"#27ae60":"#ddd",margin:"0 4px 20px",transition:"all .3s",flexShrink:0}}/>}
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ─── HEADER ──────────────────────────────────────────────────────────────── */
+function Header({step}) {
+  return (
+    <header style={{background:"linear-gradient(135deg,#7b0d0d 0%,#c0392b 50%,#e74c3c 100%)",color:"white",paddingTop:32,position:"relative",overflow:"hidden"}}>
+      <div style={{position:"absolute",inset:0,backgroundImage:"radial-gradient(circle at 15% 50%, rgba(255,255,255,.07) 0%, transparent 45%)"}}/>
+      <svg style={{position:"absolute",bottom:0,left:0,width:"100%",opacity:.1}} height="36" viewBox="0 0 800 36" preserveAspectRatio="none">
+        <polyline points="0,18 80,18 110,4 135,30 160,4 185,30 210,18 800,18" fill="none" stroke="white" strokeWidth="2"/>
+      </svg>
+      <div style={{position:"relative",zIndex:1,textAlign:"center",padding:"0 24px 8px"}}>
+        <h1 style={{fontSize:"clamp(20px,4vw,34px)",fontWeight:"bold",margin:"0 0 6px"}}>Mon Plan Cardiovasculaire</h1>
+        <p style={{fontFamily:"Arial,sans-serif",fontSize:14,opacity:.8,margin:0}}>Éducation Thérapeutique — Facteurs de Risque Modifiables</p>
+      </div>
+      <Stepper step={step}/>
+    </header>
+  );
+}
+
+/* ─── ÉTAPE 1 ─────────────────────────────────────────────────────────────── */
+function Step1({selected,onToggle,onNext}) {
+  const MAX=5, canAdd=selected.length<MAX;
+  return (
+    <div style={{maxWidth:1100,margin:"0 auto",padding:"28px 20px 60px",animation:"slideIn .4s ease"}}>
+      <div style={{textAlign:"center",marginBottom:28}}>
+        <h2 style={{fontSize:22,color:"#1a1a2e",marginBottom:8}}>Quels axes souhaitez-vous améliorer ?</h2>
+        <p style={{fontFamily:"Arial,sans-serif",fontSize:14,color:"#777",lineHeight:1.6}}>Sélectionnez <strong>jusqu'à 5 facteurs</strong> sur lesquels vous vous sentez prêt·e à agir.</p>
+        <div style={{display:"inline-flex",alignItems:"center",gap:8,marginTop:12,background:selected.length>=MAX?"#fdf0ee":"#eaf4fc",border:`1px solid ${selected.length>=MAX?"#e8a598":"#aed6f1"}`,borderRadius:20,padding:"6px 16px",fontFamily:"Arial,sans-serif",fontSize:13,color:selected.length>=MAX?"#c0392b":"#1a5276",fontWeight:"bold"}}>
+          {selected.length>=MAX?"⛔":"🫀"} {selected.length} / {MAX} sélectionné{selected.length>1?"s":""}
+        </div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(210px,1fr))",gap:16}}>
+        {TOPICS.map(t=>{
+          const isSel=selected.includes(t.id), isDis=!isSel&&!canAdd;
+          return (
+            <div key={t.id} onClick={()=>!isDis&&onToggle(t.id)} style={{background:isSel?t.bg:"white",borderRadius:14,padding:"20px 18px",cursor:isDis?"not-allowed":"pointer",border:`2px solid ${isSel?t.color:isDis?"#f0f0f0":"#e8e8e8"}`,boxShadow:isSel?"0 6px 20px rgba(0,0,0,.1)":"0 2px 8px rgba(0,0,0,.05)",transform:isSel?"translateY(-3px)":"translateY(0)",transition:"all .22s ease",opacity:isDis?.45:1,position:"relative",animation:"fadeIn .35s ease forwards"}}>
+              {isSel&&<div style={{position:"absolute",top:10,right:10,width:22,height:22,borderRadius:"50%",background:t.color,color:"white",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:"bold"}}>✓</div>}
+              <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:isSel?t.color:"#f0f0f0",borderRadius:"12px 12px 0 0"}}/>
+              <div style={{fontSize:30,marginBottom:8}}>{t.emoji}</div>
+              <h3 style={{fontSize:14,fontWeight:"bold",margin:"0 0 3px",color:"#1a1a2e"}}>{t.title}</h3>
+              <p style={{fontFamily:"Arial,sans-serif",fontSize:11,color:"#999",margin:0}}>{t.subtitle}</p>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{textAlign:"center",marginTop:36}}>
+        <button disabled={selected.length===0} onClick={onNext} style={{padding:"15px 44px",background:selected.length===0?"#ddd":"linear-gradient(135deg,#c0392b,#e74c3c)",color:"white",border:"none",borderRadius:50,cursor:selected.length===0?"not-allowed":"pointer",fontSize:15,fontFamily:"Arial,sans-serif",fontWeight:"bold",boxShadow:selected.length===0?"none":"0 6px 20px rgba(192,57,43,.35)"}}>
+          Suivant — Définir mon engagement →
+        </button>
+        {selected.length===0&&<p style={{fontFamily:"Arial,sans-serif",fontSize:13,color:"#bbb",marginTop:10}}>Sélectionnez au moins un facteur pour continuer</p>}
+      </div>
+    </div>
+  );
+}
+
+/* ─── ÉTAPE 2 ─────────────────────────────────────────────────────────────── */
+function Step2({selected,levels,onSetLevel,onNext,onBack}) {
+  const selTopics=TOPICS.filter(t=>selected.includes(t.id));
+  const allSet=selTopics.every(t=>levels[t.id]);
+  return (
+    <div style={{maxWidth:800,margin:"0 auto",padding:"28px 20px 60px",animation:"slideIn .4s ease"}}>
+      <div style={{textAlign:"center",marginBottom:28}}>
+        <h2 style={{fontSize:22,color:"#1a1a2e",marginBottom:8}}>Quel niveau de changement visez-vous ?</h2>
+        <p style={{fontFamily:"Arial,sans-serif",fontSize:14,color:"#777",lineHeight:1.6}}>Pour chacun des facteurs choisis, indiquez l'intensité du changement souhaité.</p>
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:18}}>
+        {selTopics.map(t=>(
+          <div key={t.id} style={{background:"white",borderRadius:16,overflow:"hidden",boxShadow:"0 4px 16px rgba(0,0,0,.08)",animation:"fadeIn .4s ease"}}>
+            <div style={{background:t.color,padding:"14px 20px",display:"flex",alignItems:"center",gap:12,color:"white"}}>
+              <span style={{fontSize:24}}>{t.emoji}</span>
+              <div style={{flexGrow:1}}>
+                <div style={{fontWeight:"bold",fontSize:15}}>{t.title}</div>
+                <div style={{fontFamily:"Arial,sans-serif",fontSize:12,opacity:.8}}>{t.subtitle}</div>
+              </div>
+              {levels[t.id]&&<div style={{background:"rgba(255,255,255,.25)",borderRadius:20,padding:"3px 12px",fontFamily:"Arial,sans-serif",fontSize:12,fontWeight:"bold"}}>{LEVEL_CFG[levels[t.id]].icon} {LEVEL_CFG[levels[t.id]].label}</div>}
+            </div>
+            <div style={{padding:"14px 18px",display:"flex",gap:10,flexWrap:"wrap"}}>
+              {Object.entries(LEVEL_CFG).map(([key,cfg])=>{
+                const isActive=levels[t.id]===key;
+                return (
+                  <button key={key} onClick={()=>onSetLevel(t.id,key)} style={{flex:1,minWidth:110,padding:"11px 12px",background:isActive?cfg.bg:"white",border:`2px solid ${isActive?cfg.color:"#e8e8e8"}`,borderRadius:10,cursor:"pointer",transform:isActive?"translateY(-2px)":"translateY(0)",transition:"all .2s",boxShadow:isActive?"0 4px 14px rgba(0,0,0,.1)":"none"}}>
+                    <div style={{fontSize:18,marginBottom:3}}>{cfg.icon}</div>
+                    <div style={{fontFamily:"Arial,sans-serif",fontWeight:"bold",fontSize:13,color:isActive?cfg.color:"#555",marginBottom:3}}>{cfg.label}</div>
+                    <div style={{fontFamily:"Arial,sans-serif",fontSize:10,color:"#999",lineHeight:1.3}}>{cfg.desc}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{display:"flex",justifyContent:"center",gap:12,marginTop:32,flexWrap:"wrap"}}>
+        <button onClick={onBack} style={{padding:"13px 28px",background:"white",border:"2px solid #ddd",borderRadius:50,cursor:"pointer",fontSize:14,fontFamily:"Arial,sans-serif",color:"#666",fontWeight:"bold"}}>← Retour</button>
+        <button disabled={!allSet} onClick={onNext} style={{padding:"13px 36px",background:allSet?"linear-gradient(135deg,#c0392b,#e74c3c)":"#ddd",color:"white",border:"none",borderRadius:50,cursor:allSet?"pointer":"not-allowed",fontSize:14,fontFamily:"Arial,sans-serif",fontWeight:"bold",boxShadow:allSet?"0 6px 20px rgba(192,57,43,.35)":"none"}}>
+          Voir mon plan personnalisé →
+        </button>
+      </div>
+      {!allSet&&<p style={{textAlign:"center",fontFamily:"Arial,sans-serif",fontSize:13,color:"#bbb",marginTop:10}}>Choisissez un niveau pour chaque facteur sélectionné</p>}
+    </div>
+  );
+}
+
+/* ─── CHECKLIST ───────────────────────────────────────────────────────────── */
+function Checklist({selTopics, levels}) {
+  const [checked, setChecked] = useState({});
+  const toggle = (id) => setChecked(prev => ({...prev, [id]: !prev[id]}));
+
+  const grouped = selTopics.map(t => ({
+    topic: t,
+    cfg: LEVEL_CFG[levels[t.id]],
+    actions: t.levels[levels[t.id]].actions.map((action,i) => ({
+      id: t.id + "-" + i,
+      action,
+    })),
+  }));
+
+  const total = grouped.reduce((s,g) => s + g.actions.length, 0);
+  const doneCount = Object.values(checked).filter(Boolean).length;
+  const pct = total === 0 ? 0 : Math.round(doneCount / total * 100);
+
+  const downloadPDF = () => {
+    const jsPDF = window.jspdf.jsPDF;
+    const doc = new jsPDF({orientation:"portrait", unit:"mm", format:"a4"});
+    const W = 210, M = 18;
+    let y = 20;
+
+    /* en-tête */
+    doc.setFillColor(192, 57, 43);
+    doc.roundedRect(M, y - 6, W - M*2, 22, 3, 3, "F");
+    doc.setFontSize(16); doc.setFont("helvetica","bold"); doc.setTextColor(255,255,255);
+    doc.text("Mon Plan Cardiovasculaire", W/2, y+4, {align:"center"});
+    doc.setFontSize(9); doc.setFont("helvetica","normal");
+    doc.text("Education Therapeutique du Patient - Check-liste personnalisee", W/2, y+11, {align:"center"});
+    y += 28;
+
+    /* barre de progression */
+    doc.setFontSize(9); doc.setTextColor(100,100,100); doc.setFont("helvetica","normal");
+    doc.text("Progression : " + doneCount + " / " + total + " actions (" + pct + "%)", M, y);
+    y += 6;
+    doc.setFillColor(220,220,220);
+    doc.roundedRect(M, y, W-M*2, 4, 2, 2, "F");
+    if (pct > 0) {
+      doc.setFillColor(192,57,43);
+      doc.roundedRect(M, y, Math.max(2, (W-M*2)*pct/100), 4, 2, 2, "F");
+    }
+    y += 12;
+
+    /* sections */
+    grouped.forEach(function(g) {
+      var tRgb = hexRgb(g.topic.color);
+      var lRgb = hexRgb(g.cfg.color);
+
+      if (y > 260) { doc.addPage(); y = 20; }
+
+      /* bandeau thème */
+      doc.setFillColor(tRgb[0], tRgb[1], tRgb[2]);
+      doc.roundedRect(M, y-4, W-M*2, 14, 2, 2, "F");
+      doc.setFontSize(12); doc.setFont("helvetica","bold"); doc.setTextColor(255,255,255);
+      doc.text(g.topic.title, M+5, y+5);
+      doc.setFontSize(9); doc.setFont("helvetica","normal");
+      doc.text("Niveau : " + g.cfg.label, W-M-5, y+5, {align:"right"});
+      y += 16;
+
+      g.actions.forEach(function(item) {
+        if (y > 272) { doc.addPage(); y = 20; }
+        var isDone = !!checked[item.id];
+
+        /* case à cocher */
+        if (isDone) {
+          doc.setFillColor(lRgb[0], lRgb[1], lRgb[2]);
+          doc.setDrawColor(lRgb[0], lRgb[1], lRgb[2]);
+        } else {
+          doc.setFillColor(255,255,255);
+          doc.setDrawColor(180,180,180);
+        }
+        doc.setLineWidth(0.5);
+        doc.roundedRect(M, y-3.5, 5, 5, 1, 1, isDone ? "FD" : "S");
+        if (isDone) {
+          doc.setDrawColor(255,255,255);
+          doc.setLineWidth(0.8);
+          doc.line(M+1, y, M+2.5, y+1.5);
+          doc.line(M+2.5, y+1.5, M+4, y-1);
+        }
+
+        /* texte action */
+        doc.setFontSize(9.5);
+        doc.setFont("helvetica", isDone ? "italic" : "normal");
+        if (isDone) {
+          doc.setTextColor(160,160,160);
+        } else {
+          doc.setTextColor(55,55,55);
+        }
+        var lines = doc.splitTextToSize(item.action, W-M*2-10);
+        doc.text(lines, M+8, y);
+        if (isDone) {
+          doc.setDrawColor(160,160,160);
+          doc.setLineWidth(0.3);
+          var tw = doc.getTextWidth(lines[0]);
+          doc.line(M+8, y-0.5, M+8+Math.min(tw, W-M*2-10), y-0.5);
+        }
+        y += lines.length * 5 + 3;
+      });
+      y += 6;
+    });
+
+    /* pied de page */
+    var pages = doc.internal.getNumberOfPages();
+    for (var p=1; p<=pages; p++) {
+      doc.setPage(p);
+      doc.setFontSize(7.5); doc.setTextColor(160,160,160); doc.setFont("helvetica","normal");
+      doc.text("Education Therapeutique du Patient - Plan Cardiovasculaire Personnalise", M, 290);
+      doc.text("Page " + p + " / " + pages, W-M, 290, {align:"right"});
+    }
+
+    doc.save("mon-plan-cardiovasculaire.pdf");
+  };
+
+  return (
+    <div style={{background:"white",borderRadius:18,boxShadow:"0 6px 24px rgba(0,0,0,.09)",overflow:"hidden",marginTop:32,border:"1px solid #f0f0f0"}}>
+      {/* en-tête checklist */}
+      <div style={{background:"linear-gradient(135deg,#1a1a2e,#2c3e6b)",padding:"20px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
+        <div>
+          <h3 style={{color:"white",fontSize:18,fontWeight:"bold",margin:"0 0 4px"}}>✅ Ma check-liste personnalisée</h3>
+          <p style={{fontFamily:"Arial,sans-serif",fontSize:13,color:"rgba(255,255,255,.6)",margin:0}}>Cochez les actions au fur et à mesure de vos progrès</p>
+        </div>
+        <div style={{background:"rgba(255,255,255,.15)",borderRadius:20,padding:"6px 16px",fontFamily:"Arial,sans-serif",fontSize:13,color:"white",fontWeight:"bold"}}>
+          {doneCount} / {total} — {pct}%
+        </div>
+      </div>
+
+      {/* barre de progression */}
+      <div style={{height:6,background:"#f0f0f0"}}>
+        <div style={{height:"100%",width:pct+"%",background:"linear-gradient(90deg,#27ae60,#2ecc71)",transition:"width .4s ease",borderRadius:"0 3px 3px 0"}}/>
+      </div>
+
+      {/* items groupés */}
+      <div style={{padding:22}}>
+        {grouped.map(g => {
+          const topicDone = g.actions.filter(it => checked[it.id]).length;
+          return (
+            <div key={g.topic.id} style={{marginBottom:22}}>
+              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10,paddingBottom:8,borderBottom:`2px solid ${g.topic.bg}`}}>
+                <span style={{fontSize:20}}>{g.topic.emoji}</span>
+                <span style={{fontWeight:"bold",fontSize:15,color:g.topic.color}}>{g.topic.title}</span>
+                <span style={{fontFamily:"Arial,sans-serif",fontSize:11,background:g.cfg.bg,color:g.cfg.color,border:`1px solid ${g.cfg.border}`,borderRadius:20,padding:"2px 10px",fontWeight:"bold"}}>{g.cfg.icon} {g.cfg.label}</span>
+                <span style={{fontFamily:"Arial,sans-serif",fontSize:12,color:"#aaa",marginLeft:"auto"}}>{topicDone}/{g.actions.length}</span>
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                {g.actions.map(item => {
+                  const done = !!checked[item.id];
+                  return (
+                    <div key={item.id} onClick={()=>toggle(item.id)} style={{display:"flex",alignItems:"flex-start",gap:12,padding:"11px 14px",borderRadius:10,cursor:"pointer",background:done?"#f8fffe":"#fafafa",border:`1.5px solid ${done?g.cfg.color+"55":"#eeeeee"}`,transition:"all .2s",opacity:done?.75:1}}>
+                      <div style={{width:22,height:22,borderRadius:6,flexShrink:0,background:done?g.cfg.color:"white",border:`2px solid ${done?g.cfg.color:"#ccc"}`,display:"flex",alignItems:"center",justifyContent:"center",transition:"all .2s",marginTop:1}}>
+                        {done&&<span style={{color:"white",fontSize:13,fontWeight:"bold",animation:"checkBounce .3s ease"}}>✓</span>}
+                      </div>
+                      <span style={{fontFamily:"Arial,sans-serif",fontSize:14,color:done?"#aaa":"#444",lineHeight:1.55,textDecoration:done?"line-through":"none",transition:"all .2s"}}>{item.action}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* boutons export */}
+      <div style={{padding:"0 22px 22px",display:"flex",gap:12,flexWrap:"wrap"}}>
+        <button onClick={downloadPDF} style={{flex:1,minWidth:180,padding:"14px 20px",background:"linear-gradient(135deg,#c0392b,#e74c3c)",color:"white",border:"none",borderRadius:12,cursor:"pointer",fontFamily:"Arial,sans-serif",fontWeight:"bold",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",gap:8,boxShadow:"0 4px 14px rgba(192,57,43,.3)",transition:"all .2s"}}
+          onMouseEnter={e=>e.currentTarget.style.transform="translateY(-2px)"}
+          onMouseLeave={e=>e.currentTarget.style.transform="translateY(0)"}
+        >
+          📥 Télécharger ma check-liste (PDF)
+        </button>
+        <button onClick={()=>window.print()} style={{flex:1,minWidth:140,padding:"14px 20px",background:"white",border:"2px solid #ddd",borderRadius:12,cursor:"pointer",fontFamily:"Arial,sans-serif",fontWeight:"bold",fontSize:14,color:"#555",display:"flex",alignItems:"center",justifyContent:"center",gap:8,transition:"all .2s"}}
+          onMouseEnter={e=>{e.currentTarget.style.borderColor="#c0392b";e.currentTarget.style.color="#c0392b";}}
+          onMouseLeave={e=>{e.currentTarget.style.borderColor="#ddd";e.currentTarget.style.color="#555";}}
+        >
+          🖨️ Imprimer
+        </button>
+      </div>
+
+      {pct===100&&total>0&&(
+        <div style={{margin:"0 22px 22px",padding:"16px 20px",background:"linear-gradient(135deg,#e8f8f5,#d5f5e3)",borderRadius:12,border:"1px solid #a9dfbf",textAlign:"center",animation:"popIn .4s ease"}}>
+          <div style={{fontSize:28,marginBottom:6}}>🎉</div>
+          <div style={{fontFamily:"Arial,sans-serif",fontWeight:"bold",color:"#1e8449",fontSize:15}}>Félicitations ! Vous avez complété toutes vos actions.</div>
+          <div style={{fontFamily:"Arial,sans-serif",fontSize:13,color:"#27ae60",marginTop:4}}>Parlez de vos progrès à votre soignant lors de votre prochaine consultation.</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── ÉTAPE 3 ─────────────────────────────────────────────────────────────── */
+function Step3({selected,levels,onBack,onRestart}) {
+  const selTopics = TOPICS.filter(t=>selected.includes(t.id));
+  return (
+    <div style={{maxWidth:860,margin:"0 auto",padding:"28px 20px 60px",animation:"slideIn .4s ease"}}>
+      <div style={{textAlign:"center",marginBottom:30}}>
+        <div style={{fontSize:42,marginBottom:8}}>🎯</div>
+        <h2 style={{fontSize:24,color:"#1a1a2e",marginBottom:6}}>Mon plan cardiovasculaire personnalisé</h2>
+        <p style={{fontFamily:"Arial,sans-serif",fontSize:14,color:"#777",maxWidth:520,margin:"0 auto",lineHeight:1.6}}>Voici vos recommandations selon les axes et niveaux d'engagement choisis.</p>
+      </div>
+
+      <div style={{display:"flex",flexDirection:"column",gap:22}}>
+        {selTopics.map(t=>{
+          const level=levels[t.id], cfg=LEVEL_CFG[level], data=t.levels[level];
+          const pUrl="https://www.perplexity.ai/search?q="+encodeURIComponent(t.perplexityCtx.replace("{level}",cfg.label.toLowerCase()));
+          return (
+            <div key={t.id} style={{background:"white",borderRadius:18,boxShadow:"0 6px 24px rgba(0,0,0,.09)",overflow:"hidden",border:`1px solid ${cfg.border}`,animation:"popIn .4s ease"}}>
+              <div style={{display:"flex",alignItems:"center",gap:14,padding:"16px 22px",borderBottom:`2px solid ${cfg.border}`,background:`linear-gradient(135deg,${t.bg},white)`}}>
+                <span style={{fontSize:32}}>{t.emoji}</span>
+                <div style={{flexGrow:1}}>
+                  <h3 style={{fontSize:17,fontWeight:"bold",color:"#1a1a2e",margin:"0 0 2px"}}>{t.title}</h3>
+                  <span style={{fontFamily:"Arial,sans-serif",fontSize:12,color:"#999"}}>{t.subtitle}</span>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:5,background:cfg.bg,border:`1.5px solid ${cfg.color}`,borderRadius:20,padding:"5px 14px",fontFamily:"Arial,sans-serif",fontWeight:"bold",fontSize:13,color:cfg.color,flexShrink:0}}>
+                  {cfg.icon} Niveau {cfg.label}
+                </div>
+              </div>
+              <div style={{padding:"18px 22px"}}>
+                {/* actions */}
+                <div style={{marginBottom:18}}>
+                  <div style={{fontFamily:"Arial,sans-serif",fontWeight:"bold",fontSize:12,color:"#888",marginBottom:8,textTransform:"uppercase",letterSpacing:.5}}>Actions recommandées</div>
+                  <div style={{display:"flex",flexDirection:"column",gap:7}}>
+                    {data.actions.map((a,i)=>(
+                      <div key={i} style={{display:"flex",gap:10,alignItems:"flex-start",padding:"9px 12px",background:"#fafafa",borderRadius:8,border:"1px solid #f0f0f0"}}>
+                        <div style={{width:20,height:20,borderRadius:"50%",flexShrink:0,background:cfg.color,color:"white",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:"bold",fontFamily:"Arial,sans-serif",marginTop:1}}>{i+1}</div>
+                        <span style={{fontFamily:"Arial,sans-serif",fontSize:13,color:"#444",lineHeight:1.55}}>{a}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {/* liens */}
+                {t.links.length>0&&(
+                  <div style={{marginBottom:16}}>
+                    <div style={{fontFamily:"Arial,sans-serif",fontWeight:"bold",fontSize:12,color:"#888",marginBottom:8,textTransform:"uppercase",letterSpacing:.5}}>Ressources utiles</div>
+                    <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                      {t.links.map((lk,i)=>(
+                        <a key={i} href={lk.url} target="_blank" rel="noopener noreferrer" style={{display:"inline-flex",alignItems:"center",gap:5,padding:"7px 14px",borderRadius:20,background:"white",border:`1.5px solid ${t.color}`,color:t.color,textDecoration:"none",fontFamily:"Arial,sans-serif",fontSize:12,fontWeight:"bold",transition:"all .2s"}}
+                          onMouseEnter={e=>e.currentTarget.style.background=t.bg}
+                          onMouseLeave={e=>e.currentTarget.style.background="white"}
+                        >↗ {lk.label}</a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {/* perplexity */}
+                <div style={{border:"2px solid #e8e8f4",borderRadius:12,overflow:"hidden"}}>
+                  <div style={{background:"linear-gradient(135deg,#1a1a2e,#20126f)",padding:"11px 16px",display:"flex",alignItems:"center",gap:10}}>
+                    <div style={{width:26,height:26,borderRadius:7,background:"linear-gradient(135deg,#20d09c,#1fa7e0)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,color:"white",fontWeight:"bold",flexShrink:0}}>✦</div>
+                    <div>
+                      <div style={{color:"white",fontFamily:"Arial,sans-serif",fontWeight:"bold",fontSize:13}}>Poser ma question à Perplexity</div>
+                      <div style={{color:"rgba(255,255,255,.5)",fontFamily:"Arial,sans-serif",fontSize:11}}>Contexte préparé — posez directement votre question</div>
+                    </div>
+                  </div>
+                  <div style={{background:"#f5f5fc",padding:"9px 16px",borderBottom:"1px solid #e8e8f4"}}>
+                    <div style={{fontFamily:"Arial,sans-serif",fontSize:9,color:"#aaa",marginBottom:2,textTransform:"uppercase",letterSpacing:1}}>Contexte envoyé</div>
+                    <div style={{fontFamily:"Arial,sans-serif",fontSize:11,color:"#666",fontStyle:"italic",lineHeight:1.5}}>
+                      « {t.perplexityCtx.replace("{level}",cfg.label.toLowerCase())}<span style={{color:"#c0392b"}}>[votre question]</span> »
+                    </div>
+                  </div>
+                  <div style={{padding:"12px 16px",background:"white"}}>
+                    <a href={pUrl} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:7,padding:"11px",width:"100%",background:"linear-gradient(135deg,#20d09c,#1fa7e0)",color:"white",textDecoration:"none",borderRadius:9,fontFamily:"Arial,sans-serif",fontWeight:"bold",fontSize:13,transition:"all .2s"}}
+                      onMouseEnter={e=>e.currentTarget.style.transform="translateY(-2px)"}
+                      onMouseLeave={e=>e.currentTarget.style.transform="translateY(0)"}
+                    >✦ Ouvrir Perplexity pour ma question ↗</a>
+                    <p style={{fontFamily:"Arial,sans-serif",fontSize:10,color:"#ccc",textAlign:"center",margin:"7px 0 0"}}>S'ouvre dans un nouvel onglet · Connexion requise</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* checklist */}
+      <Checklist selTopics={selTopics} levels={levels}/>
+
+      {/* navigation */}
+      <div style={{display:"flex",justifyContent:"center",gap:12,marginTop:36,flexWrap:"wrap"}}>
+        <button onClick={onBack} style={{padding:"13px 26px",background:"white",border:"2px solid #ddd",borderRadius:50,cursor:"pointer",fontSize:13,fontFamily:"Arial,sans-serif",color:"#666",fontWeight:"bold"}}>← Modifier mes niveaux</button>
+        <button onClick={onRestart} style={{padding:"13px 26px",background:"linear-gradient(135deg,#1a1a2e,#2c3e6b)",color:"white",border:"none",borderRadius:50,cursor:"pointer",fontSize:13,fontFamily:"Arial,sans-serif",fontWeight:"bold",boxShadow:"0 6px 20px rgba(0,0,0,.2)"}}>🔄 Recommencer</button>
+      </div>
+    </div>
+  );
+}
+
+/* ─── APP ─────────────────────────────────────────────────────────────────── */
+function App() {
+  const [step, setStep] = useState(1);
+  const [selected, setSelected] = useState([]);
+  const [levels, setLevels] = useState({});
+
+  const toggleTopic = id => setSelected(prev => prev.includes(id) ? prev.filter(x=>x!==id) : prev.length<5 ? [...prev,id] : prev);
+  const setLevel   = (id,lv) => setLevels(prev => ({...prev,[id]:lv}));
+  const goTo = n => { setStep(n); window.scrollTo({top:0,behavior:"smooth"}); };
+  const restart = () => { setSelected([]); setLevels({}); goTo(1); };
+
+  return (
+    <div style={{minHeight:"100vh"}}>
+      <Header step={step}/>
+      {step===1&&<Step1 selected={selected} onToggle={toggleTopic} onNext={()=>goTo(2)}/>}
+      {step===2&&<Step2 selected={selected} levels={levels} onSetLevel={setLevel} onNext={()=>goTo(3)} onBack={()=>goTo(1)}/>}
+      {step===3&&<Step3 selected={selected} levels={levels} onBack={()=>goTo(2)} onRestart={restart}/>}
+      <footer style={{background:"#1a1a2e",color:"rgba(255,255,255,.4)",textAlign:"center",padding:"20px",fontFamily:"Arial,sans-serif",fontSize:11,letterSpacing:.5}}>
+        Éducation Thérapeutique du Patient — Plan Cardiovasculaire Personnalisé
+      </footer>
+    </div>
+  );
+}
+
+ReactDOM.render(<App/>, document.getElementById("root"));
+</script>
+</body>
+</html>
